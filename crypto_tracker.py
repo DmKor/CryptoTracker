@@ -1,4 +1,8 @@
 import requests
+import tkinter as tk
+from tkinter import ttk
+from datetime import datetime
+from tkinter import messagebox
 
 API_URL = "https://data-api.binance.vision/api/v3/ticker/24hr"
 
@@ -8,7 +12,7 @@ SYMBOLS = [
     "SOLUSDT",
     "BNBUSDT",
     "XRPUSDT"
-]
+    ]
 
 def get_crypto_data(symbol):
     response = requests.get(
@@ -28,6 +32,7 @@ def get_crypto_data(symbol):
 
 def get_all_crypto_data():
     cryptos = []
+    errors = []
 
     for symbol in SYMBOLS:
         try:
@@ -44,40 +49,73 @@ def get_all_crypto_data():
             KeyError,
             ValueError
         ) as error:
-            print(f"Ошибка получения {symbol}: {error}")
+            errors.append(f"{symbol}: {error}")
 
-    return cryptos
+    return cryptos, errors
 
-    response.raise_for_status()
+root = tk.Tk()
+root.title("Crypto Tracker")
+root.geometry("600x400")
 
-    data = response.json()
+columns = ("symbol", "price", "change")
 
-    price = float(data["lastPrice"])
-    change = float(data["priceChangePercent"])
+tree = ttk.Treeview(root, columns=columns, show="headings")
 
-    return price, change
+tree.heading("symbol", text="Криптовалюта")
+tree.heading("price", text="Цена (USDT)")
+tree.heading("change", text="Изменение за 24 ч.")
 
+tree.pack(fill="both", expand=True)
 
-symbol = "BTCUSDT"
+update_label = tk.Label(root, text="Последнее обновление: ещё не выполнялось")
+update_label.pack(pady=5)
 
-try:
-    # price, change = get_crypto_data(symbol)
-    # print(symbol, price, change)
+def update_table():
+    cryptos, errors = get_all_crypto_data()
 
-    cryptos = get_all_crypto_data()
+    print("ТИП cryptos:", type(cryptos))
+    print("ТИП ПЕРВОГО ЭЛЕМЕНТА:", type(cryptos[0]) if cryptos else "Список пуст")
 
-    for crypto in cryptos:
-        print(
-            crypto["symbol"],
-            crypto["price"],
-            crypto["change"]
+    if not cryptos:
+        messagebox.showerror(
+            "Ошибка",
+            "Не удалось получить данные о криптовалютах."
+        )
+        return
+
+    if errors:
+        messagebox.showwarning(
+            "Предупреждение",
+            "Не удалось получить данные по некоторым криптовалютам:\n"
+            + "\n".join(errors)
         )
 
-except requests.exceptions.RequestException as error:
-    print("Ошибка:", error)
+    for item in tree.get_children():
+        tree.delete(item)
 
-except KeyError as error:
-    print("Отсутствует нужный ключ:", error)
+    print("Содержимое cryptos:", cryptos)
+    print("Тип первого элемента:", type(cryptos[0]))
 
-except ValueError as error:
-    print("Не удалось преобразовать значение во float:", error)
+    for crypto in cryptos:
+        tree.insert(
+            "",
+            "end",
+            values=(
+                crypto["symbol"],
+                crypto["price"],
+                f'{crypto["change"]:.2f}%'
+            )
+        )
+    current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    update_label.config(text=f"Последнее обновление: {current_time}")
+
+refresh_button = tk.Button(
+    root,
+    text="Обновить котировки",
+    command=update_table
+)
+
+refresh_button.pack(pady=10)
+update_table()
+
+root.mainloop()
