@@ -55,26 +55,60 @@ def get_all_crypto_data():
 
 root = tk.Tk()
 root.title("Crypto Tracker")
-root.geometry("600x400")
+root.geometry("600x500")
+
+title = tk.Label(root, text="Crypto Tracker", font=("Arial", 18, "bold"))
+title.pack(pady=15)
 
 columns = ("symbol", "price", "change")
 
 tree = ttk.Treeview(root, columns=columns, show="headings")
+style = ttk.Style()
+# style.theme_use("clam")
+
+style.configure(
+    "Treeview.Heading",
+    font=("Arial", 11, "bold"),
+    background="#DCE6F1",
+    foreground="#333333"
+)
+
+style.configure(
+    "Treeview",
+    rowheight=32
+)
+
+style.configure(
+    "Treeview",
+    font=("Arial", 11)
+)
+
+style.configure(
+    "Treeview",
+    foreground="#333333"
+)
+
+tree.tag_configure("even", background="#F0F4F8")
+tree.tag_configure("odd", background="#FFFFFF")
+
+tree.tag_configure("negative", foreground="#CC3333")
+tree.tag_configure("positive", foreground="#008800")
 
 tree.heading("symbol", text="Криптовалюта")
 tree.heading("price", text="Цена (USDT)")
 tree.heading("change", text="Изменение за 24 ч.")
 
-tree.pack(fill="both", expand=True)
+tree.column("symbol", width=180, anchor="center")
+tree.column("price", width=160, anchor="e")
+tree.column("change", width=180, anchor="center")
+
+tree.pack(fill="both", expand=True, padx=10, pady=10)
 
 update_label = tk.Label(root, text="Последнее обновление: ещё не выполнялось")
 update_label.pack(pady=5)
 
 def update_table():
     cryptos, errors = get_all_crypto_data()
-
-    print("ТИП cryptos:", type(cryptos))
-    print("ТИП ПЕРВОГО ЭЛЕМЕНТА:", type(cryptos[0]) if cryptos else "Список пуст")
 
     if not cryptos:
         messagebox.showerror(
@@ -93,29 +127,37 @@ def update_table():
     for item in tree.get_children():
         tree.delete(item)
 
-    print("Содержимое cryptos:", cryptos)
-    print("Тип первого элемента:", type(cryptos[0]))
+    for index, crypto in enumerate(cryptos):
+        tag = "even" if index % 2 == 0 else "odd"
 
-    for crypto in cryptos:
+        if crypto["change"] < 0:
+            change_tag = "negative"
+        else:
+            change_tag = "positive"
+
         tree.insert(
             "",
             "end",
             values=(
                 crypto["symbol"],
-                crypto["price"],
+                f'{crypto["price"]:.4f}'.rstrip("0").rstrip("."),
                 f'{crypto["change"]:.2f}%'
-            )
+            ),
+            tags=(tag, change_tag)
         )
+
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     update_label.config(text=f"Последнее обновление: {current_time}")
 
 refresh_button = tk.Button(
     root,
     text="Обновить котировки",
-    command=update_table
+    command=update_table,
+    padx=20,
+    pady=10
 )
 
-refresh_button.pack(pady=10)
+refresh_button.pack(pady=30)
 update_table()
 
 root.mainloop()
