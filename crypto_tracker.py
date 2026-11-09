@@ -4,6 +4,7 @@ from tkinter import ttk
 from datetime import datetime
 from tkinter import messagebox
 import threading
+import queue
 
 API_URL = "https://data-api.binance.vision/api/v3/ticker/24hr"
 
@@ -59,7 +60,14 @@ class CryptoTracker:
         self.root = root
         self.root.title("Crypto Tracker")
         self.root.geometry("600x500")
+
+        self.is_updating = False
+        self.result_queue = queue.Queue()
+
         self.create_widgets()
+
+        self.root.after(50, self.check_queue)
+        self.root.after(60000, self.auto_update)
 
     def create_widgets(self):
         title = tk.Label(
@@ -67,102 +75,147 @@ class CryptoTracker:
             text="Crypto Tracker",
             font=("Arial", 18, "bold")
         )
-        title.pack(pady=15)
-        columns = ("symbol", "price", "change")
-        self.tree = ttk.Treeview(
+        title.pack(pady=20)
+
+        tk.Label(
             self.root,
-            columns=columns,
-            show="headings"
+            text="Выберите криптовалюту:",
+            font=("Arial", 12)
+        ).pack(pady=5)
+
+        self.crypto_combo = ttk.Combobox(
+            self.root,
+            values=SYMBOLS,
+            state="readonly",
+            font=("Arial", 12),
+            width=20
         )
-        style = ttk.Style()
-        # style.theme_use("clam")
-        style.configure(
-            "Treeview",
-            rowheight=32,
-            font=("Arial", 11),
-            foreground="#333333"
+        self.crypto_combo.pack(pady=10)
+        self.crypto_combo.current(0)
+
+        self.crypto_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda event: self.update_table()
         )
 
-        style.configure(
-            "Treeview.Heading",
-            font=("Arial", 11, "bold"),
-            background="#DCE6F1",
-            foreground="#333333"
+        self.price_label = tk.Label(
+            self.root,
+            text="Цена: —",
+            font=("Arial", 16, "bold")
         )
-        self.tree.tag_configure("even", background="#F0F4F8")
-        self.tree.tag_configure("odd", background="#FFFFFF")
+        self.price_label.pack(pady=20)
 
-        self.tree.tag_configure("negative", foreground="#CC3333")
-        self.tree.tag_configure("positive", foreground="#008800")
-
-        self.tree.heading("symbol", text="Криптовалюта")
-        self.tree.heading("price", text="Цена (USDT)")
-        self.tree.heading("change", text="Изменение за 24 ч.")
-
-        self.tree.column("symbol", width=180, anchor="center")
-        self.tree.column("price", width=160, anchor="e")
-        self.tree.column("change", width=180, anchor="center")
-
-        self.tree.pack(fill="both", expand=True, padx=10, pady=10)
+        self.change_label = tk.Label(
+            self.root,
+            text="Изменение за 24 часа: —",
+            font=("Arial", 13)
+        )
+        self.change_label.pack(pady=10)
 
         self.update_label = tk.Label(
             self.root,
             text="Последнее обновление: ещё не выполнялось"
         )
-        self.update_label.pack(pady=5)
+        self.update_label.pack(pady=10)
 
         self.refresh_button = tk.Button(
             self.root,
-            text="Обновить котировки",
+            text="Обновить котировку",
             command=self.update_table,
             padx=20,
             pady=10
         )
-        self.refresh_button.pack(pady=30)
+        self.refresh_button.pack(pady=20)
 
     def update_table(self):
-        cryptos, errors = get_all_crypto_data()
-
-        if not cryptos:
-            messagebox.showerror(
-                "Ошибка",
-                "Не удалось получить данные о криптовалютах."
-            )
+        if self.is_updating:
             return
 
-        if errors:
-            messagebox.showwarning(
-                "Предупреждение",
-                "Не удалось получить данные по некоторым криптовалютам:\n"
-                + "\n".join(errors)
+        symbol = self.crypto_combo.get()
+
+        self.is_updating = True
+        self.refresh_button.config(state="disabled")
+
+        threading.Thread(
+            target=self.load_data,
+            args=(symbol,),
+            daemon=True
+        ).start()
+
+    def load_data(self, symbol):
+        try:
+            price, change = get_crypto_data(symbol)
+
+            cryptos = [{
+                "symbol": symbol,
+                "price": price,
+                "change": change
+            }]
+
+            errors = []
+
+        except Exception as error:
+            cryptos = []
+            errors = [f"{symbol}: {error}"]
+
+        self.result_queue.put((cryptos, errors))
+
+    def check_queue(self):
+        try:
+            cryptos, errors = self.result_queue.get_nowait()
+
+            self.is_updating = False
+            self.refresh_button.config(state="normal")
+
+            if not cryptos:
+                messagebox.showerror(
+                    "Ошибка",
+                    "Не удалось получить данные о криптовалюте.\n"
+                    + "\n".join(errors)
+                )
+                return
+
+            crypto = cryptos[0]
+
+            self.price_label.config(
+                text=f'Цена: {crypto["price"]:.4f}'.rstrip("0").rstrip(".")
+                     + " USDT"
             )
 
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+            change = crypto["change"]
 
-        for index, crypto in enumerate(cryptos):
-            tag = "even" if index % 2 == 0 else "odd"
+            self.change_label.config(
+                text=f"Изменение за 24 часа: {change:+.2f}%"
+            )
 
-            if crypto["change"] < 0:
-                change_tag = "negative"
+            if change < 0:
+                self.change_label.config(fg="#CC3333")
             else:
-                change_tag = "positive"
+                self.change_label.config(fg="#008800")
 
-            self.tree.insert(
-                "",
-                "end",
-                values=(
-                    crypto["symbol"],
-                    f'{crypto["price"]:.4f}'.rstrip("0").rstrip("."),
-                    f'{crypto["change"]:.2f}%'
-                ),
-                tags=(tag, change_tag)
+            current_time = datetime.now().strftime(
+                "%d.%m.%Y %H:%M:%S"
             )
 
-        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        self.update_label.config(
-            text=f"Последнее обновление: {current_time}"
-        )
+            self.update_label.config(
+                text=f"Последнее обновление: {current_time}"
+            )
+
+            if errors:
+                messagebox.showwarning(
+                    "Предупреждение",
+                    "\n".join(errors)
+                )
+
+        except queue.Empty:
+            pass
+
+        finally:
+            self.root.after(50, self.check_queue)
+
+    def auto_update(self):
+        self.update_table()
+        self.root.after(60000, self.auto_update)
 
 # columns = ("symbol", "price", "change")
 #
