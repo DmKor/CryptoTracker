@@ -3,7 +3,6 @@ import requests
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
-from tkinter import messagebox
 import threading
 import queue
 
@@ -34,12 +33,38 @@ def get_crypto_data(symbol):
 
     return price, change
 
+def get_error_message(error):
+
+    if isinstance(error, requests.exceptions.Timeout):
+        return "Сервер не ответил вовремя. Попробуйте позже."
+
+    elif isinstance(error, requests.exceptions.ConnectionError):
+        return "Не удалось подключиться к серверу. Проверьте интернет."
+
+    elif isinstance(error, requests.exceptions.HTTPError):
+
+        status_code = error.response.status_code
+
+        if status_code >= 500:
+            return "Сервер временно недоступен. Попробуйте позже."
+
+        elif status_code == 404:
+            return "Запрашиваемая котировка не найдена."
+
+        else:
+            return "Сервер отклонил запрос. Попробуйте позже."
+
+    elif isinstance(error, (ValueError, KeyError)):
+        return "Сервер вернул некорректные данные."
+
+    else:
+        return "Не удалось обновить котировку. Попробуйте позже."
 
 class CryptoTracker:
     def __init__(self, root):
         self.root = root
         self.root.title("Crypto Tracker")
-        self.root.geometry("680x540")
+        self.root.geometry("680x620")
         self.root.minsize(620, 500)
         self.root.configure(bg="#F3F5F8")
 
@@ -136,14 +161,46 @@ class CryptoTracker:
             pady=(8, 25)
         )
 
-        select_label = tk.Label(
+        # Баннер уведомлений
+
+        # Зарезервированное место для баннера
+        self.status_area = tk.Frame(
             card,
-            text="КРИПТОВАЛЮТА",
-            font=("Arial", 9, "bold"),
             bg="#FFFFFF",
-            fg="#718096"
+            height=55
         )
-        select_label.pack(pady=(25, 8))
+
+        self.status_area.pack(
+            fill="x",
+            padx=20,
+            pady=(15, 5)
+        )
+
+        self.status_area.pack_propagate(False)
+
+        # Баннер уведомлений
+        self.status_banner = tk.Frame(
+            self.status_area,
+            bg="#E8F7EF"
+        )
+
+        self.status_label = tk.Label(
+            self.status_banner,
+            text="",
+            font=("Arial", 9),
+            bg="#E8F7EF",
+            fg="#159767",
+            wraplength=500,
+            justify="center",
+            anchor="center"
+        )
+
+        self.status_label.pack(
+            fill="both",
+            expand=True,
+            padx=14,
+            pady=8
+        )
 
         self.crypto_combo = ttk.Combobox(
             card,
@@ -214,6 +271,49 @@ class CryptoTracker:
         )
         self.refresh_button.pack(pady=(3, 20))
 
+    def show_status(self, message, success=True):
+        if success:
+            bg_color = "#E8F7EF"
+            text_color = "#159767"
+        else:
+            bg_color = "#FDECEC"
+            text_color = "#DC4545"
+
+        self.status_banner.config(bg=bg_color)
+
+        self.status_label.config(
+            text=message,
+            bg=bg_color,
+            fg=text_color
+        )
+
+        # Подбираем ширину баннера под текст
+        self.status_area.update_idletasks()
+
+        available_width = self.status_area.winfo_width() - 20
+
+        self.status_label.config(
+            wraplength=max(150, min(500, available_width - 28))
+        )
+
+        self.status_banner.update_idletasks()
+
+        banner_width = min(
+            self.status_banner.winfo_reqwidth(),
+            available_width
+        )
+
+        banner_height = self.status_banner.winfo_reqheight()
+
+        # Размещаем баннер по центру
+        self.status_banner.place(
+            relx=0.5,
+            rely=0.5,
+            anchor="center",
+            width=banner_width,
+            height=banner_height
+        )
+
     def update_table(self):
         if self.is_updating:
             return
@@ -241,9 +341,10 @@ class CryptoTracker:
 
             errors = []
 
+
         except Exception as error:
             cryptos = []
-            errors = [f"{symbol}: {error}"]
+            errors = [get_error_message(error)]
 
         self.result_queue.put((cryptos, errors))
 
@@ -255,10 +356,9 @@ class CryptoTracker:
             self.refresh_button.config(state="normal")
 
             if not cryptos:
-                messagebox.showerror(
-                    "Ошибка",
-                    "Не удалось получить данные о криптовалюте.\n"
-                    + "\n".join(errors)
+                self.show_status(
+                    errors[0] if errors else "Не удалось получить данные.",
+                    success=False
                 )
                 return
 
@@ -296,9 +396,13 @@ class CryptoTracker:
             )
 
             if errors:
-                messagebox.showwarning(
-                    "Предупреждение",
-                    "\n".join(errors)
+                self.show_status(
+                    errors[0],
+                    success=False
+                )
+            else:
+                self.show_status(
+                    f"Котировка {crypto['symbol']} успешно обновлена."
                 )
 
         except queue.Empty:
