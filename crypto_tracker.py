@@ -1,3 +1,4 @@
+
 import requests
 import tkinter as tk
 from tkinter import ttk
@@ -14,7 +15,8 @@ SYMBOLS = [
     "SOLUSDT",
     "BNBUSDT",
     "XRPUSDT"
-    ]
+]
+
 
 def get_crypto_data(symbol):
     response = requests.get(
@@ -32,28 +34,6 @@ def get_crypto_data(symbol):
 
     return price, change
 
-def get_all_crypto_data():
-    cryptos = []
-    errors = []
-
-    for symbol in SYMBOLS:
-        try:
-           price, change = get_crypto_data(symbol)
-
-           cryptos.append({
-               "symbol": symbol,
-               "price": price,
-               "change": change
-                })
-
-        except (
-            requests.exceptions.RequestException,
-            KeyError,
-            ValueError
-        ) as error:
-            errors.append(f"{symbol}: {error}")
-
-    return cryptos, errors
 
 class CryptoTracker:
     def __init__(self, root):
@@ -62,6 +42,7 @@ class CryptoTracker:
         self.root.geometry("680x540")
         self.root.minsize(620, 500)
         self.root.configure(bg="#F3F5F8")
+
         self.is_updating = False
         self.result_queue = queue.Queue()
 
@@ -74,7 +55,6 @@ class CryptoTracker:
         style = ttk.Style()
         style.theme_use("clam")
 
-        # Стиль выпадающего списка
         style.configure(
             "Modern.TCombobox",
             font=("Arial", 12),
@@ -94,7 +74,6 @@ class CryptoTracker:
             foreground=[("readonly", "#202B3C")]
         )
 
-        # Стиль кнопки
         style.configure(
             "Primary.TButton",
             font=("Arial", 11, "bold"),
@@ -113,7 +92,6 @@ class CryptoTracker:
             foreground=[("disabled", "#FFFFFF")]
         )
 
-        # Шапка приложения
         header = tk.Frame(self.root, bg="#F3F5F8")
         header.pack(fill="x", padx=35, pady=(20, 12))
 
@@ -144,7 +122,6 @@ class CryptoTracker:
         )
         subtitle.pack(pady=(4, 0))
 
-        # Основная карточка
         card = tk.Frame(
             self.root,
             bg="#FFFFFF",
@@ -159,7 +136,6 @@ class CryptoTracker:
             pady=(8, 25)
         )
 
-        # Выбор криптовалюты
         select_label = tk.Label(
             card,
             text="КРИПТОВАЛЮТА",
@@ -186,14 +162,12 @@ class CryptoTracker:
             lambda event: self.update_table()
         )
 
-        # Разделитель
         tk.Frame(
             card,
             height=1,
             bg="#E9EEF5"
         ).pack(fill="x", padx=35, pady=(25, 20))
 
-        # Цена
         price_caption = tk.Label(
             card,
             text="ТЕКУЩАЯ ЦЕНА",
@@ -212,7 +186,6 @@ class CryptoTracker:
         )
         self.price_label.pack()
 
-        # Изменение за 24 часа
         self.change_label = tk.Label(
             card,
             text="Изменение за 24 часа: —",
@@ -224,7 +197,6 @@ class CryptoTracker:
         )
         self.change_label.pack(pady=18)
 
-        # Время обновления
         self.update_label = tk.Label(
             card,
             text="Последнее обновление: ещё не выполнялось",
@@ -234,7 +206,6 @@ class CryptoTracker:
         )
         self.update_label.pack(pady=(5, 18))
 
-        # Кнопка обновления
         self.refresh_button = ttk.Button(
             card,
             text="↻   Обновить котировку",
@@ -340,121 +311,10 @@ class CryptoTracker:
         self.update_table()
         self.root.after(60000, self.auto_update)
 
-# columns = ("symbol", "price", "change")
-#
-# tree = ttk.Treeview(root, columns=columns, show="headings")
-# style = ttk.Style()
-# style.configure(
-#     "Treeview",
-#     rowheight=32,
-#     font=("Arial", 11),
-#     foreground="#333333"
-# )
-# # style.theme_use("clam")
-#
-# style.configure(
-#     "Treeview.Heading",
-#     font=("Arial", 11, "bold"),
-#     background="#DCE6F1",
-#     foreground="#333333"
-# )
-#
-# style.configure(
-#     "Treeview",
-#     rowheight=32
-# )
-#
-# style.configure(
-#     "Treeview",
-#     font=("Arial", 11)
-# )
-#
-# style.configure(
-#     "Treeview",
-#     foreground="#333333"
-# )
-#
-# tree.tag_configure("even", background="#F0F4F8")
-# tree.tag_configure("odd", background="#FFFFFF")
-#
-# tree.tag_configure("negative", foreground="#CC3333")
-# tree.tag_configure("positive", foreground="#008800")
-#
-# tree.heading("symbol", text="Криптовалюта")
-# tree.heading("price", text="Цена (USDT)")
-# tree.heading("change", text="Изменение за 24 ч.")
-#
-# tree.column("symbol", width=180, anchor="center")
-# tree.column("price", width=160, anchor="e")
-# tree.column("change", width=180, anchor="center")
-#
-# tree.pack(fill="both", expand=True, padx=10, pady=10)
-#
-# update_label = tk.Label(root, text="Последнее обновление: ещё не выполнялось")
-# update_label.pack(pady=5)
-#
-# def update_table():
-#     cryptos, errors = get_all_crypto_data()
-#
-#     if not cryptos:
-#         messagebox.showerror(
-#             "Ошибка",
-#             "Не удалось получить данные о криптовалютах."
-#         )
-#         return
-#
-#     if errors:
-#         messagebox.showwarning(
-#             "Предупреждение",
-#             "Не удалось получить данные по некоторым криптовалютам:\n"
-#             + "\n".join(errors)
-#         )
-#
-#     for item in tree.get_children():
-#         tree.delete(item)
-#
-#     for index, crypto in enumerate(cryptos):
-#         tag = "even" if index % 2 == 0 else "odd"
-#
-#         if crypto["change"] < 0:
-#             change_tag = "negative"
-#         else:
-#             change_tag = "positive"
-#
-#         tree.insert(
-#             "",
-#             "end",
-#             values=(
-#                 crypto["symbol"],
-#                 f'{crypto["price"]:.4f}'.rstrip("0").rstrip("."),
-#                 f'{crypto["change"]:.2f}%'
-#             ),
-#             tags=(tag, change_tag)
-#         )
-#
-#     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-#     update_label.config(text=f"Последнее обновление: {current_time}")
-#
-# refresh_button = tk.Button(
-#     root,
-#     text="Обновить котировки",
-#     command=update_table,
-#     padx=20,
-#     pady=10
-# )
-#
-# refresh_button.pack(pady=30)
-# update_table()
-#
-# def auto_update():
-#     update_table()
-#     root.after(10000, auto_update)
-#
-# root.after(10000, auto_update)
 
 root = tk.Tk()
 app = CryptoTracker(root)
 
-root.after(100, app.update_table)
+root.after(50, app.update_table)
 
 root.mainloop()
