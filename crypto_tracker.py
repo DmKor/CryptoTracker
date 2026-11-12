@@ -33,6 +33,7 @@ def get_crypto_data(symbol):
 
     return price, change
 
+
 def get_error_message(error):
 
     if isinstance(error, requests.exceptions.Timeout):
@@ -43,10 +44,23 @@ def get_error_message(error):
 
     elif isinstance(error, requests.exceptions.HTTPError):
 
-        status_code = error.response.status_code
+        response = error.response
+        status_code = response.status_code
 
         if status_code >= 500:
             return "Сервер временно недоступен. Попробуйте позже."
+
+        elif status_code == 400:
+            try:
+                error_data = response.json()
+
+                if error_data.get("code") == -1121:
+                    return "Выбрана неизвестная криптовалюта."
+
+            except ValueError:
+                pass
+
+            return "Сервер отклонил запрос. Проверьте параметры."
 
         elif status_code == 404:
             return "Запрашиваемая котировка не найдена."
@@ -69,12 +83,18 @@ class CryptoTracker:
         self.root.configure(bg="#F3F5F8")
 
         self.is_updating = False
+        self.is_closing = False
         self.result_queue = queue.Queue()
+
+        self.queue_check_id = None
+        self.auto_update_id = None
 
         self.create_widgets()
 
-        self.root.after(50, self.check_queue)
-        self.root.after(60000, self.auto_update)
+        self.queue_check_id = self.root.after(50, self.check_queue)
+        self.auto_update_id = self.root.after(60000, self.auto_update)
+
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def create_widgets(self):
         style = ttk.Style()
@@ -409,12 +429,34 @@ class CryptoTracker:
             pass
 
         finally:
-            self.root.after(50, self.check_queue)
+
+            if not self.is_closing:
+                self.queue_check_id = self.root.after(
+
+                    50, self.check_queue
+
+                )
 
     def auto_update(self):
-        self.update_table()
-        self.root.after(60000, self.auto_update)
+        if self.is_closing:
+            return
 
+        self.update_table()
+
+        self.auto_update_id = self.root.after(
+            60000, self.auto_update
+        )
+
+    def close(self):
+        self.is_closing = True
+
+        if self.queue_check_id is not None:
+            self.root.after_cancel(self.queue_check_id)
+
+        if self.auto_update_id is not None:
+            self.root.after_cancel(self.auto_update_id)
+
+        self.root.destroy()
 
 root = tk.Tk()
 app = CryptoTracker(root)
