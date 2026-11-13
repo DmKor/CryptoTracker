@@ -1,0 +1,12 @@
+# API configuration
+config.py
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# PyCharm
+.idea/
